@@ -1,0 +1,16 @@
+{
+  "name": "pdf-talker",
+  "version": "0.0.1",
+  "description": "Talk with your PDF",
+  "license": "ISC",
+  "author": "Yatharth Jain",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "oidc-client-ts": "^3.3.0",
+    "react-oidc-context": "^3.3.0"
+  }
+}

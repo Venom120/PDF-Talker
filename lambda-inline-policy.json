@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-pdfs",
+        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-pdfs/*",
+        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-assets",
+        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-assets/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [ "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query" ],
+      "Resource": "arn:aws:dynamodb:ap-south-1:578492749731:table/pdf_talker_sessions"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [ "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents" ],
+      "Resource": "arn:aws:logs:ap-south-1:578492749731:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [ "bedrock:InvokeModel" ],
+      "Resource": "*"
+    }
+  ]
+}
