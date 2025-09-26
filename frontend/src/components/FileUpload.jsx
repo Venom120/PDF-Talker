@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
 
-// Vite exposes environment variables via import.meta.env
-const API_ENDPOINT = import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL;
-const S3_BUCKET_NAME = import.meta.env.VITE_S3_BUCKET_NAME;
-const AWS_REGION = import.meta.env.VITE_AWS_REGION;
+// The base URL for your API Gateway stage
+const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL;
 
-
-function FileUpload({ onUploadSuccess }) {
+function FileUpload({ onUploadSuccess, auth }) {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
@@ -27,34 +24,49 @@ function FileUpload({ onUploadSuccess }) {
       setMessage('Please select a file first.');
       return;
     }
-    if (!API_ENDPOINT || !S3_BUCKET_NAME || !AWS_REGION) {
-        setMessage('Error: Environment variables for API endpoint, bucket, or region are not set.');
-        console.error("Missing environment variables");
+    if (!API_BASE_URL) {
+        setMessage('Error: API endpoint is not set in environment variables.');
+        console.error("Missing VITE_API_GATEWAY_ENDPOINT_URL");
         return;
     }
 
+    const token = auth.user?.id_token;
+    if (!token) {
+      setMessage('Authentication error: No token found. Please sign in again.');
+      return;
+    }
+
+    // Construct the full URL by appending the correct route
+
     setUploading(true);
-    setMessage('Getting upload URL...');
+    setMessage('Getting secure upload URL...');
 
     try {
-      // 1. Get the presigned URL from your Lambda function
-      const response = await fetch(API_ENDPOINT, {
+      // 1. Get BOTH presigned URLs from your Lambda function
+      const response = await fetch(`${API_BASE_URL}/presign`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ key: `uploads/${file.name}` }),
       });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+            throw new Error('Authorization failed. Check API Gateway authorizer settings.');
+        }
+        if (response.status === 404) {
+            throw new Error(`Route not found. Ensure your API is deployed and the URL is correct: ${API_BASE_URL}/presign`);
+        }
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to get presigned URL.');
       }
 
-      const { url: uploadURL, key: s3Key } = await response.json();
+      const { uploadURL, getObjectURL } = await response.json();
       setMessage('Uploading file...');
 
-      // 2. Upload the file directly to S3 using the presigned URL
+      // 2. Upload the file directly to S3
       const uploadResponse = await fetch(uploadURL, {
         method: 'PUT',
         headers: {
@@ -64,13 +76,11 @@ function FileUpload({ onUploadSuccess }) {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('S3 upload failed.');
+        throw new Error('S3 upload failed. Check S3 CORS policy.');
       }
 
       setMessage('Upload successful!');
-      
-      const fileUrl = `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`;
-      onUploadSuccess(fileUrl);
+      onUploadSuccess(getObjectURL);
 
     } catch (error) {
       console.error('Upload error:', error);

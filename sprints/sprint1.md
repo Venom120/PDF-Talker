@@ -388,7 +388,7 @@ aws cognito-idp create-user-pool-client --user-pool-id $POOL_ID --client-name pd
 
 Console steps (recommended for UI config):
 
-* Cognito → Manage User Pools → Create new pool → name it `pdf-talker-user-pool` → App clients → add client (no secret) → set callback URL to `http://localhost:3000` while developing.
+* Cognito → Manage User Pools → Create new pool → name it `pdf-talker-user-pool` → App clients → add client (no secret) → set callback URL to ` http://localhost:5173` while developing.
 
 **Acceptance:** you can create a user in the pool (console) and call `AdminInitiateAuth` / test login later.
 

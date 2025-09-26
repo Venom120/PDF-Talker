@@ -10,8 +10,8 @@ function App() {
   const [showAvatar, setShowAvatar] = useState(false);
 
   const handleSignOut = () => {
-    auth.removeUser();
-    window.location.reload();
+    // Also pass the logout_uri to ensure a clean redirect
+    auth.signoutRedirect({ post_logout_redirect_uri: import.meta.env.VITE_LOGOUT_URI });
   };
   
   const handleUploadSuccess = (url) => {
@@ -24,6 +24,7 @@ function App() {
   }
 
   if (auth.error) {
+    // Display the specific error to the user for easier debugging
     return <div>Error: {auth.error.message}</div>;
   }
 
@@ -37,7 +38,8 @@ function App() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', padding: '1rem' }}>
           <main>
-            <FileUpload onUploadSuccess={handleUploadSuccess} />
+            {/* Pass the auth object to FileUpload so it can access the user's token */}
+            <FileUpload onUploadSuccess={handleUploadSuccess} auth={auth} />
             <PdfViewer fileUrl={pdfUrl} />
           </main>
           <aside>
@@ -71,4 +73,3 @@ function App() {
 }
 
 export default App;
-

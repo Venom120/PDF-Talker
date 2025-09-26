@@ -13,6 +13,7 @@ const cognitoAuthConfig = {
   authority: `https://cognito-idp.${import.meta.env.VITE_AWS_REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`,
   
   // The 'client_id' is the unique identifier for your application within the User Pool.
+  // This value MUST match the variable in your .env file.
   client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
   
   // 'redirect_uri' is the URL where Cognito will send the user back to after they sign in.
