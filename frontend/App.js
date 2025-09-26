@@ -4,11 +4,11 @@ import { useAuth } from "react-oidc-context";
 
 function App() {
   const auth = useAuth();
-  const clientId = "bpadjgl2a2274von72utq9pau";
-  const logoutUri = "<logout uri>";
-  const cognitoDomain = "https://ap-south-1rtpac4isd.auth.ap-south-1.amazoncognito.com";
 
   const signOutRedirect = () => {
+    const clientId = "bpadjgl2a2274von72utq9pau";
+    const logoutUri = "<logout uri>";
+    const cognitoDomain = "https://ap-south-1rtpac4isd.auth.ap-south-1.amazoncognito.com";
     window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
 
