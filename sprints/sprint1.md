@@ -396,14 +396,14 @@ Console steps (recommended for UI config):
 
 ## 9) Quick checklist & verification (must pass these before Sprint 2)
 
-* [ ] GitHub repo `PDF-Talker` created & `dev` branch pushed.
-* [ ] Two S3 buckets exist: `pdf-talker-pds-<SUFFIX>-pdfs` and `pdf-talker-pds-<SUFFIX>-assets`.
-* [ ] DynamoDB table `pdf_talker_sessions` is `ACTIVE`.
-* [ ] IAM role `pdf-talker-lambda-exec` exists and has inline policy.
-* [ ] Lambdas `pdf-talker-presign-upload` and `pdf-talker-s3-ingest` exist and have correct env var `PDF_BUCKET`.
-* [ ] S3 event notifications invoke the ingest Lambda (verified by upload & CloudWatch logs).
-* [ ] API Gateway route for presign upload works (test via `curl` or `aws lambda invoke`).
-* [ ] Cognito user pool `pdf-talker-user-pool` created with an app client.
+* [x] GitHub repo `PDF-Talker` created & `dev` branch pushed.
+* [x] Two S3 buckets exist: `pdf-talker-pds-<SUFFIX>-pdfs` and `pdf-talker-pds-<SUFFIX>-assets`.
+* [x] DynamoDB table `pdf_talker_sessions` is `ACTIVE`.
+* [x] IAM role `pdf-talker-lambda-exec` exists and has inline policy.
+* [x] Lambdas `pdf-talker-presign-upload` and `pdf-talker-s3-ingest` exist and have correct env var `PDF_BUCKET`.
+* [x] S3 event notifications invoke the ingest Lambda (verified by upload & CloudWatch logs).
+* [x] API Gateway route for presign upload works (test via `curl` or `aws lambda invoke`).
+* [x] Cognito user pool `pdf-talker-user-pool` created with an app client.
 
 If any of these fail, stop and fix it — Sprint 2 depends on this.
 
