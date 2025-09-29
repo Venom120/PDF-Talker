@@ -17,12 +17,25 @@
     },
     {
       "Effect": "Allow",
-      "Action": [ "dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query" ],
-      "Resource": "arn:aws:dynamodb:ap-south-1:578492749731:table/pdf_talker_sessions"
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:BatchWriteItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:ap-south-1:578492749731:table/pdf_talker_sessions",
+        "arn:aws:dynamodb:ap-south-1:578492749731:table/pdf_talker_chunks"
+      ]
     },
     {
       "Effect": "Allow",
-      "Action": [ "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents" ],
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
       "Resource": "arn:aws:logs:ap-south-1:578492749731:*"
     },
     {
