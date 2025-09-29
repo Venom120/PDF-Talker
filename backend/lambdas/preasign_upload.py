@@ -44,7 +44,7 @@ def lambda_handler(event, context):
             "body": json.dumps({
                 "uploadURL": upload_url, 
                 "getObjectURL": get_object_url,
-                "key": file_name
+                "s3_key": file_name # Ensure this line is present
             })
         }
     except Exception as e:

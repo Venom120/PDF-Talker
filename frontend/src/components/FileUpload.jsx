@@ -63,7 +63,7 @@ function FileUpload({ onUploadSuccess, auth }) {
         throw new Error(errorData.message || 'Failed to get presigned URL.');
       }
 
-      const { uploadURL, getObjectURL } = await response.json();
+      const { uploadURL, getObjectURL, s3_key } = await response.json();
       setMessage('Uploading file...');
 
       // 2. Upload the file directly to S3
@@ -80,7 +80,7 @@ function FileUpload({ onUploadSuccess, auth }) {
       }
 
       setMessage('Upload successful!');
-      onUploadSuccess(getObjectURL);
+      onUploadSuccess(getObjectURL, s3_key);
 
     } catch (error) {
       console.error('Upload error:', error);
