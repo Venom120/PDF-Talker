@@ -28,40 +28,44 @@ function MainContent() {
   const [query, setQuery] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(false); // New state for the toggle
 
   const handleUploadSuccess = (url, key) => {
     setPdfUrl(url);
     setS3Key(key);
   };
 
-  const handleAsk = async () => {
-    if (!query || !s3Key) return;
+  const handleAsk = async (textQuery) => {
+    if (!textQuery || !s3Key) return;
     setIsLoading(true);
+    setAiResponse('');
     try {
       const response = await fetch(import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query, document_id: s3Key }),
+        body: JSON.stringify({ query: textQuery, document_id: s3Key }),
       });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setAiResponse(data.response_text);
 
-      // Play the audio response
       if (data.audio_url) {
         const audio = new Audio(data.audio_url);
         audio.play();
       }
-
     } catch (error) {
       console.error('Error fetching AI response:', error);
-      setAiResponse('An error occurred. Please try again.');
+      setAiResponse('An error occurred. Please check the console.');
     } finally {
       setIsLoading(false);
+      setQuery('');
     }
   };
 
-  const handleTranscription = (transcript) => {
-    setQuery(transcript);
+  const handleTranscriptionComplete = (transcript) => {
+    if (transcript.trim()) {
+      handleAsk(transcript.trim());
+    }
   };
 
   useEffect(() => {
@@ -89,9 +93,9 @@ function MainContent() {
     <div className="App">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #444' }}>
         <h1>Welcome, {auth.user?.profile.email}</h1>
+        <p>Welcome, {auth.user?.profile.email}</p>
         <button onClick={() => auth.signoutRedirect()}>Log out</button>
       </header>
-
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', padding: '1rem' }}>
         <main>
           <FileUpload onUploadSuccess={handleUploadSuccess} auth={auth} />
@@ -102,24 +106,37 @@ function MainContent() {
           <div style={{ border: '1px solid #ccc', borderRadius: '8px', width: '100%', height: '400px', backgroundColor: '#6e6e6eff', padding: '10px', boxSizing: 'border-box', overflowY: 'auto' }}>
             {isLoading ? <p>Thinking...</p> : <p>{aiResponse || "Ask a question to see the answer here."}</p>}
           </div>
-          <div style={{marginTop: '20px'}}>
-            <input 
-                type="text" 
-                placeholder="Ask a question about the PDF..." 
-                style={{width: 'calc(100% - 22px)', padding: '10px'}}
+
+          {isVoiceMode ? (
+            <VoiceRecorder onTranscriptionComplete={handleTranscriptionComplete} />
+          ) : (
+            <div style={{ marginTop: '20px' }}>
+              <input
+                type="text"
+                placeholder="Ask a question about the PDF..."
+                style={{ width: 'calc(100% - 22px)', padding: '10px' }}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyUp={(e) => e.key === 'Enter' && handleAsk()}
-                />
-            <button onClick={handleAsk} disabled={isLoading}>
-              {isLoading ? 'Thinking...' : 'Ask'}
-            </button>
-            <VoiceRecorder onTranscription={handleTranscription} />
+                onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
+              />
+              <button
+                style={{ width: '100%', marginTop: '10px', padding: '10px' }}
+                onClick={handleAsk}
+                disabled={isLoading || !s3Key}
+              >
+                {isLoading ? 'Asking...' : 'Ask (Text)'}
+              </button>
+            </div>
+          )}
+          <div className="toggle-switch">
+            <span>Text Mode</span>
+            <label className="switch">
+              <input type="checkbox" checked={isVoiceMode} onChange={() => setIsVoiceMode(!isVoiceMode)} />
+              <span className="slider round"></span>
+            </label>
+            <span>Voice Mode</span>
           </div>
         </aside>
-      </div>
-      <div className="avatar-placeholder">
-        <p>3D Avatar</p>
       </div>
     </div>
   );
