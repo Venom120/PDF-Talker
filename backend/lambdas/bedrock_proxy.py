@@ -38,7 +38,7 @@ def lambda_handler(event, context):
 
         Question: {user_query}
 
-        Provide a answer based only on the information in the document context. And you can deduce few things from the the document also by you own knowledge. But if the answer is not in the context, say "I could not find an answer to that in the document."
+        Provide a answer based only on the information in the document context. And you can deduce few more things from the the document also by your own knowledge. But if the answer is not in the context, say "I could not find an answer to that in the document."
         """
 
         # 3. Invoke the Bedrock model with the CORRECT format for Titan

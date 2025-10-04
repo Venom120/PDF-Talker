@@ -1,90 +1,104 @@
 import React, { useState, useRef } from 'react';
-import { Buffer } from 'buffer';
+import WavEncoder from 'wav-encoder';
 
-// This is a simplified WebSocket-to-Transcribe handler.
-// A production implementation would be more robust.
 const VoiceRecorder = ({ onTranscriptionComplete }) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const socket = useRef(null);
-  const stream = useRef(null);
-  const audioProcessor = useRef(null);
-  const finalTranscript = useRef('');
+    const [isRecording, setIsRecording] = useState(false);
+    const mediaRecorder = useRef(null);
+    const audioChunks = useRef([]);
 
-  const toggleRecording = async () => {
-    if (isRecording) {
-      // Stop recording
-      setIsRecording(false);
-      if (stream.current) {
-        stream.current.getTracks().forEach(track => track.stop());
-      }
-      if (audioProcessor.current) {
-        audioProcessor.current.disconnect();
-      }
-      if (socket.current) {
-        // Wait a moment for the last transcription results to come in
-        setTimeout(() => {
-          socket.current.close();
-          onTranscriptionComplete(finalTranscript.current);
-          finalTranscript.current = '';
-        }, 1500); // 1.5-second delay
-      }
-    } else {
-      // Start recording
-      setIsRecording(true);
-      try {
-        stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-        socket.current = new WebSocket(import.meta.env.VITE_WEBSOCKET_API_ENDPOINT);
-
-        socket.current.onopen = () => {
-          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          const source = audioContext.createMediaStreamSource(stream.current);
-          const processor = audioContext.createScriptProcessor(1024, 1, 1);
-
-          processor.onaudioprocess = (event) => {
-            const inputData = event.inputBuffer.getChannelData(0);
-            const pcmData = new Int16Array(inputData.length);
-            for (let i = 0; i < inputData.length; i++) {
-              pcmData[i] = inputData[i] * 32767;
-            }
-            // 1. Convert binary audio to a Base64 string
-            const audio_b64 = Buffer.from(pcmData.buffer).toString('base64');
-            
-            // 2. Send as a JSON object
-            if (socket.current?.readyState === WebSocket.OPEN) {
-              socket.current.send(JSON.stringify({ audio_data: audio_b64 }));
-            }
-          };
-          source.connect(processor);
-          processor.connect(audioContext.destination); // Connect to destination to hear audio (optional)
-          audioProcessor.current = processor; // Store for cleanup
-        };
-
-        socket.current.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          // When the Lambda sends the final transcript, this will be triggered
-          if (data.transcript) {
-            // Pass the final, complete transcript up to the App component
-            onTranscriptionComplete(data.transcript);
-          }
-        };
-        
-        socket.current.onerror = (error) => {
-            console.error("WebSocket Error:", error);
+    const toggleRecording = async () => {
+        if (isRecording) {
+            console.log("Stopping recording...");
+            mediaRecorder.current.stop();
             setIsRecording(false);
-        };
+        } else {
+            console.log("Starting recording...");
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder.current = new MediaRecorder(stream);
+                audioChunks.current = [];
 
-      } catch (error) {
-        console.error("Error starting recording:", error);
-        setIsRecording(false);
-      }
+                mediaRecorder.current.ondataavailable = (event) => {
+                    audioChunks.current.push(event.data);
+                };
+
+                mediaRecorder.current.onstop = async () => {
+                    console.log("Recording stopped. Processing audio...");
+                    const audioBlob = new Blob(audioChunks.current, { type: 'audio/webm' });
+                    await processAndSendAudio(audioBlob);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.current.start();
+                setIsRecording(true);
+
+            } catch (error) {
+                console.error("Error accessing microphone:", error);
+            }
+        }
+    };
+
+    // New, robust function to convert ArrayBuffer to Base64
+    const bufferToBase64 = (buffer) => {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
     }
-  };
 
-  return (
-    <button onClick={toggleRecording} style={{backgroundColor: isRecording ? 'red' : '#007bff', margin: 20}}>
-      {isRecording ? 'Stop Recording' : 'Press to Talk'}
-    </button>
-  );
+    const processAndSendAudio = async (audioBlob) => {
+        console.log(`Step 1: Received audioBlob of size ${audioBlob.size}`);
+        try {
+            const audioContext = new AudioContext({ sampleRate: 16000 });
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const pcmData = audioBuffer.getChannelData(0);
+            console.log(`Step 2: Decoded to PCM data with length ${pcmData.length}`);
+
+            const wavBuffer = await WavEncoder.encode({
+                sampleRate: 16000,
+                channelData: [pcmData],
+            });
+            console.log(`Step 3: Encoded to WAV buffer of size ${wavBuffer.byteLength}`);
+
+            const audio_b64 = bufferToBase64(wavBuffer);
+            console.log(`Step 4: Converted to Base64 string, preparing HTTP request...`);
+
+            const response = await fetch(`${import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL}/transcribe`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    audio_data: audio_b64
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log("Step 6: Received transcript from backend:", data.transcript);
+
+            if (data.transcript) {
+                onTranscriptionComplete(data.transcript);
+            }
+
+        } catch (error) {
+            console.error("Error processing or sending audio:", error);
+        }
+    };
+    
+    return (
+        <button onClick={toggleRecording} style={{ backgroundColor: isRecording ? '#dc3545' : '#007bff' }}>
+            {isRecording ? 'Stop Speaking' : 'Press to Talk'}
+        </button>
+    );
 };
 
 export default VoiceRecorder;

@@ -1,121 +1,66 @@
 import json
-import boto3
 import os
 import base64
-import asyncio
-import websockets
-from botocore.auth import SigV4Auth
-from botocore.awsrequest import AWSRequest
-from botocore.credentials import get_credentials
-from botocore.session import Session
+import boto3
+from huggingface_hub import InferenceClient # type: ignore
 
-# --- Initialization ---
-API_GW_ENDPOINT = os.environ.get('API_GW_ENDPOINT')
-if not API_GW_ENDPOINT:
-    raise ValueError("API_GW_ENDPOINT environment variable not set!")
+# --- Initialization (No changes here) ---
+HF_TOKEN = os.environ.get('HF_TOKEN')
+print("Lambda initializing...")
 
-apigateway_management_client = boto3.client('apigatewaymanagementapi', endpoint_url=API_GW_ENDPOINT)
-REGION = os.environ.get('AWS_REGION', 'ap-south-1')
+hf_client = None
+if HF_TOKEN:
+    print("HF_TOKEN found, initializing InferenceClient.")
+    hf_client = InferenceClient(token=HF_TOKEN)
+else:
+    print("ERROR: HF_TOKEN environment variable not set!")
 # --- End of Initialization ---
 
-def get_presigned_url():
-    """Generates a presigned URL for the Transcribe streaming service."""
-    request = AWSRequest(
-        method="GET",
-        url=f"https://transcribestreaming.{REGION}.amazonaws.com:8443/stream-transcription-websocket",
-        headers={
-            "host": f"transcribestreaming.{REGION}.amazonaws.com:8443"
-        }
-    )
-    session = Session()
-    credentials = get_credentials(session)
-    SigV4Auth(credentials, "transcribe", REGION).add_auth(request)
-    return request.url
-
-async def send_receive(connection_id, audio_chunk):
-    """Connects to Transcribe, sends audio, receives transcript, and sends it to the client."""
-    presigned_url = get_presigned_url()
-    if presigned_url:
-        presigned_url = presigned_url.replace("https://", "wss://")
-    else:
-        print("Error in getting presigned url")
-        return
-    async with websockets.connect(presigned_url) as ws:
-        # 1. Send the initial configuration message to Transcribe
-        await ws.send(json.dumps({
-            "headers": {
-                ":message-type": "event",
-                ":event-type": "Configuration",
-            },
-            "body": {
-                "LanguageCode": "en-US",
-                "MediaEncoding": "pcm",
-                "MediaSampleRateHertz": 16000,
-            }
-        }))
-
-        # 2. Send the audio chunk
-        # CORRECTED: Use list() to convert bytes to a JSON-serializable list of integers
-        await ws.send(json.dumps({
-            "headers": {
-                ":message-type": "event",
-                ":event-type": "AudioEvent"
-            },
-            "body": list(audio_chunk)
-        }))
-        
-        # 3. Signal that the audio stream has ended
-        await ws.send(json.dumps({
-            "headers": {
-                ":message-type": "event",
-                ":event-type": "EndOfStream"
-            },
-            "body": {}
-        }))
-
-        # 4. Receive and process the transcription results
-        final_transcript = ""
-        while True:
-            try:
-                message = await ws.recv()
-                data = json.loads(message)
-                if 'Transcript' in data:
-                    results = data['Transcript']['Results']
-                    if results and not results[0]['IsPartial']:
-                        final_transcript += results[0]['Alternatives'][0]['Transcript'] + " "
-                elif 'Exception' in data:
-                    print(f"Transcription error from AWS: {data['Exception']['Message']}")
-                    break
-            except websockets.exceptions.ConnectionClosed as e:
-                print(f"WebSocket connection closed: {e}")
-                break
-        
-        # 5. Send the final transcript back to the browser
-        if final_transcript:
-            print(f"Final transcript: {final_transcript.strip()}")
-            apigateway_management_client.post_to_connection(
-                ConnectionId=connection_id,
-                Data=json.dumps({'transcript': final_transcript.strip()})
-            )
-
 def lambda_handler(event, context):
-    connection_id = event['requestContext']['connectionId']
-    route_key = event['requestContext']['routeKey']
+    try:
+        print("Received HTTP POST request to /transcribe")
+        body = json.loads(event.get('body', '{}'))
+        audio_b64 = body.get('audio_data')
 
-    if route_key == '$connect' or route_key == '$disconnect':
-        return {'statusCode': 200}
+        if not audio_b64:
+            raise ValueError("Missing audio_data in request payload.")
 
-    elif route_key == '$default':
-        try:
-            body = json.loads(event['body'])
-            audio_b64 = body.get('audio_data')
-            if audio_b64:
-                audio_chunk = base64.b64decode(audio_b64)
-                asyncio.run(send_receive(connection_id, audio_chunk))
-        except Exception as e:
-            print(f"Error in default route: {e}")
-            return {'statusCode': 500}
-        
-        return {'statusCode': 200}
+        print(f"Step 1: Received Base64 audio string of length {len(audio_b64)}.")
+        audio_bytes = base64.b64decode(audio_b64)
+        print(f"Step 2: Decoded audio to {len(audio_bytes)} bytes.")
 
-    return {'statusCode': 400}
+        if not hf_client:
+            raise Exception("Hugging Face client is not initialized. Check HF_TOKEN.")
+
+        print("Step 3: Sending audio data to Hugging Face Whisper API...")
+        result = hf_client.automatic_speech_recognition(
+            audio_bytes,
+            model="openai/whisper-large-v3"
+        )
+        print(f"Step 4: Received response from Hugging Face: {result}")
+
+        transcript = result.get("text", "").strip()
+        print(f"Step 5: Returning transcript in HTTP response: '{transcript}'")
+
+        # Return a standard HTTP response
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*' # Important for CORS
+            },
+            'body': json.dumps({'transcript': transcript})
+        }
+
+    except Exception as e:
+        print(f"--- ERROR IN LAMBDA ---")
+        print(f"Error Type: {type(e).__name__}")
+        print(f"Error Details: {e}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*' # Important for CORS
+            },
+            'body': json.dumps({'error': str(e)})
+        }
