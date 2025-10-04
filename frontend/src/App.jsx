@@ -40,7 +40,7 @@ function MainContent() {
     setIsLoading(true);
     setAiResponse('');
     try {
-      const response = await fetch(import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL, {
+      const response = await fetch(`${import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL}/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: textQuery, document_id: s3Key }),
@@ -117,11 +117,11 @@ function MainContent() {
                 style={{ width: 'calc(100% - 22px)', padding: '10px' }}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
+                onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
               />
               <button
                 style={{ width: '100%', marginTop: '10px', padding: '10px' }}
-                onClick={handleAsk}
+                onClick={() => handleAsk(query)}
                 disabled={isLoading || !s3Key}
               >
                 {isLoading ? 'Asking...' : 'Ask (Text)'}
