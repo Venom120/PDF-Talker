@@ -38,29 +38,33 @@ const VoiceRecorder = ({ onTranscriptionComplete }) => {
         socket.current.onopen = () => {
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
           const source = audioContext.createMediaStreamSource(stream.current);
-          audioProcessor.current = audioContext.createScriptProcessor(1024, 1, 1);
+          const processor = audioContext.createScriptProcessor(1024, 1, 1);
 
-          audioProcessor.current.onaudioprocess = (event) => {
+          processor.onaudioprocess = (event) => {
             const inputData = event.inputBuffer.getChannelData(0);
             const pcmData = new Int16Array(inputData.length);
             for (let i = 0; i < inputData.length; i++) {
               pcmData[i] = inputData[i] * 32767;
             }
-            const buffer = Buffer.from(pcmData.buffer);
+            // 1. Convert binary audio to a Base64 string
+            const audio_b64 = Buffer.from(pcmData.buffer).toString('base64');
+            
+            // 2. Send as a JSON object
             if (socket.current?.readyState === WebSocket.OPEN) {
-              socket.current.send(buffer);
+              socket.current.send(JSON.stringify({ audio_data: audio_b64 }));
             }
           };
-          source.connect(audioProcessor.current);
-          audioProcessor.current.connect(audioContext.destination);
+          source.connect(processor);
+          processor.connect(audioContext.destination); // Connect to destination to hear audio (optional)
+          audioProcessor.current = processor; // Store for cleanup
         };
 
         socket.current.onmessage = (event) => {
           const data = JSON.parse(event.data);
-          // This is a placeholder for actual transcription logic
-          // A real implementation would handle interim and final results
+          // When the Lambda sends the final transcript, this will be triggered
           if (data.transcript) {
-            finalTranscript.current += data.transcript + ' ';
+            // Pass the final, complete transcript up to the App component
+            onTranscriptionComplete(data.transcript);
           }
         };
         
@@ -77,7 +81,7 @@ const VoiceRecorder = ({ onTranscriptionComplete }) => {
   };
 
   return (
-    <button onClick={toggleRecording} style={{backgroundColor: isRecording ? 'red' : '#007bff'}}>
+    <button onClick={toggleRecording} style={{backgroundColor: isRecording ? 'red' : '#007bff', margin: 20}}>
       {isRecording ? 'Stop Recording' : 'Press to Talk'}
     </button>
   );

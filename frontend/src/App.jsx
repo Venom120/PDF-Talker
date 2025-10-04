@@ -117,7 +117,7 @@ function MainContent() {
                 style={{ width: 'calc(100% - 22px)', padding: '10px' }}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+                onKeyDown={(e) => e.key === 'Enter' && handleAsk(query)}
               />
               <button
                 style={{ width: '100%', marginTop: '10px', padding: '10px' }}
