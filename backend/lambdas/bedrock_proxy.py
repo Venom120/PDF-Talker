@@ -12,7 +12,7 @@ s3 = boto3.client('s3')
 # Get environment variables
 CHUNKS_TABLE_NAME = os.environ.get('CHUNKS_TABLE_NAME', 'pdf_talker_chunks')
 ASSETS_BUCKET_NAME = os.environ.get('ASSETS_BUCKET_NAME') # Ensure this is set in your Lambda's environment variables
-chunks_table = dynamodb.Table(CHUNKS_TABLE_NAME)
+chunks_table = dynamodb.Table(CHUNKS_TABLE_NAME) # type: ignore
 MODEL_ID = "amazon.titan-text-express-v1"
 
 def lambda_handler(event, context):
@@ -25,7 +25,7 @@ def lambda_handler(event, context):
             return {"statusCode": 400, "body": json.dumps({"error": "Missing 'query' or 'document_id'"})}
 
         # 1. Retrieve all chunks for the document from DynamoDB
-        response = chunks_table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('document_id').eq(document_id))
+        response = chunks_table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('document_id').eq(document_id)) # type: ignore
         context_chunks = [item['text_chunk'] for item in response.get('Items', [])]
         full_context = " ".join(context_chunks)
 
