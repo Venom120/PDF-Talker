@@ -12,7 +12,9 @@
         "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-pdfs",
         "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-pdfs/*",
         "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-assets",
-        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-assets/*"
+        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-assets/*",
+        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-audios",
+        "arn:aws:s3:::pdf-talker-pds-pdftalker-ai-agent-audios/*"
       ]
     },
     {

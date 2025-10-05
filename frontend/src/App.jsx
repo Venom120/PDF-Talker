@@ -42,10 +42,15 @@ function MainContent() {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL}/query`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // If your /query endpoint is protected, add the Authorization header here
+          // 'Authorization': `Bearer ${auth.user?.id_token}`
+        },
         body: JSON.stringify({ query: textQuery, document_id: s3Key }),
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
       const data = await response.json();
       setAiResponse(data.response_text);
 
@@ -53,6 +58,7 @@ function MainContent() {
         const audio = new Audio(data.audio_url);
         audio.play();
       }
+
     } catch (error) {
       console.error('Error fetching AI response:', error);
       setAiResponse('An error occurred. Please check the console.');

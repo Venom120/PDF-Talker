@@ -25,7 +25,7 @@ const VoiceRecorder = ({ onTranscriptionComplete }) => {
                 mediaRecorder.current.onstop = async () => {
                     console.log("Recording stopped. Processing audio...");
                     const audioBlob = new Blob(audioChunks.current, { type: 'audio/webm' });
-                    await processAndSendAudio(audioBlob);
+                    await   processAndSendAudio(audioBlob);
                     stream.getTracks().forEach(track => track.stop());
                 };
 

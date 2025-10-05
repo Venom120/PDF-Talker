@@ -3,6 +3,7 @@ aws lambda delete-function --function-name pdf-talker-presign-upload --profile $
 # delete s3 buckets (must be empty)
 aws s3 rb s3://$PDF_BUCKET --force --profile $AWS_PROFILE
 aws s3 rb s3://$ASSETS_BUCKET --force --profile $AWS_PROFILE
+aws s3 rb s3://$AUDIOS_BUCKET --force --profile $AWS_PROFILE
 # delete dynamodb
 aws dynamodb delete-table --table-name pdf_talker_sessions --profile $AWS_PROFILE --region $AWS_REGION
 # and remove role/policies

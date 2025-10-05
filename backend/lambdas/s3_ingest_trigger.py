@@ -3,7 +3,7 @@ import logging
 import boto3
 import os
 import urllib.parse
-from pypdf import PdfReader # Import the new library
+from pypdf import PdfReader # type: ignore
 
 # Set up logging
 logger = logging.getLogger()
@@ -15,7 +15,7 @@ dynamodb = boto3.resource('dynamodb')
 
 # Get table name from environment variables
 CHUNKS_TABLE_NAME = os.environ.get('DYNAMODB_CHUNKS_TABLE')
-chunks_table = dynamodb.Table(CHUNKS_TABLE_NAME)
+chunks_table = dynamodb.Table(CHUNKS_TABLE_NAME) # type: ignore
 
 def chunk_text(text, chunk_size=500, chunk_overlap=50):
     """Splits text into chunks of a specified size with overlap."""
