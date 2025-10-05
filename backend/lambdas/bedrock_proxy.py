@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import uuid
+import time
 from botocore.client import Config
 
 # Initialize AWS clients
@@ -11,37 +12,53 @@ polly = boto3.client('polly')
 s3 = boto3.client('s3', config=Config(s3={'addressing_style': 'path'}))
 
 # Get table and bucket names from environment variables
-TABLE_NAME = os.environ.get('DYNAMODB_CHUNKS_TABLE')
+CHUNKS_TABLE_NAME = os.environ.get('DYNAMODB_CHUNKS_TABLE')
+HISTORY_TABLE_NAME = os.environ.get('DYNAMODB_HISTORY_TABLE')
 AUDIOS_BUCKET = os.environ.get('AUDIOS_BUCKET')
 MODEL_ID = 'amazon.titan-text-express-v1'
 
 def lambda_handler(event, context):
     try:
-        # --- DEBUG: Log the entire incoming event from API Gateway ---
         print(f"## RECEIVED EVENT: {json.dumps(event)}")
+
+        user_id = event['requestContext']['authorizer']['jwt']['claims']['sub']
 
         body = json.loads(event.get('body', '{}'))
         user_query = body.get('query')
         document_id = body.get('document_id')
-        
-        # --- DEBUG: Log the parsed input parameters ---
-        print(f"## PARSED PARAMETERS: document_id='{document_id}', user_query='{user_query}'")
+        chat_history_str = body.get('chat_history', '')
 
-        if not all([user_query, document_id, TABLE_NAME, AUDIOS_BUCKET]):
-            raise ValueError("Missing required parameters: query, document_id, or env vars.")
+        print(f"## PARSED PARAMETERS: document_id='{document_id}', user_query='{user_query}', user_id='{user_id}'")
 
-        table = dynamodb.Table(TABLE_NAME) # type: ignore
-        response = table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('document_id').eq(document_id)) # type: ignore
+        if not all([user_query, document_id, CHUNKS_TABLE_NAME, HISTORY_TABLE_NAME, AUDIOS_BUCKET, user_id]):
+            raise ValueError("Missing required parameters.")
+
+        # Retrieve document chunks from DynamoDB
+        chunks_table = dynamodb.Table(CHUNKS_TABLE_NAME) # type: ignore
+        response = chunks_table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('document_id').eq(document_id)) # type: ignore
         chunks = [item['text_chunk'] for item in response.get('Items', [])]
         context_text = "\n".join(chunks)
 
-        # --- DEBUG: Log the context retrieved from DynamoDB ---
-        print(f"## DYNAMODB CONTEXT: Retrieved {len(chunks)} chunks for document '{document_id}'. Total context length: {len(context_text)} chars.")
+        print(f"## DYNAMODB CONTEXT: Retrieved {len(chunks)} chunks for document '{document_id}'.")
 
-        prompt = f"""\n\nHuman: Use the following context to answer the user's question. If you don't know the answer, just say "Not Found".
-        <context>{context_text}</context>
-        Question: {user_query}\n\nAssistant:"""
+        # Construct the prompt with chat history
+        prompt = f"""
+        Human: Use the following context and chat history to answer the user's question. If you don't know the answer, just say "I couldn't find the answer in this context".
 
+        <context>
+        {context_text}
+        </context>
+
+        <chat_history>
+        {chat_history_str}
+        </chat_history>
+
+        Question: {user_query}
+        
+        Assistant:
+        """
+
+        # Invoke the Bedrock model
         bedrock_request = {
             "body": json.dumps({
                 "inputText": prompt,
@@ -53,9 +70,20 @@ def lambda_handler(event, context):
         response_body = json.loads(bedrock_response.get('body').read())
         ai_response_text = response_body.get('results')[0].get('outputText').strip()
 
-        # --- DEBUG: Log the text response from Bedrock ---
         print(f"## BEDROCK RESPONSE: '{ai_response_text}'")
+        
+        # Save the current exchange to the chat history table
+        history_table = dynamodb.Table(HISTORY_TABLE_NAME) # type: ignore
+        history_table.put_item(Item={
+            'user_id': user_id,
+            'timestamp': int(time.time()),
+            'document_id': document_id,
+            'user_query': user_query,
+            'ai_response': ai_response_text
+        })
 
+
+        # Synthesize audio response with Polly
         polly_response = polly.synthesize_speech(
             Text=ai_response_text, OutputFormat='mp3', VoiceId='Aditi'
         )
@@ -66,8 +94,7 @@ def lambda_handler(event, context):
             Body=polly_response['AudioStream'].read(), ContentType='audio/mpeg'
         )
         
-        # --- DEBUG: Log the S3 key for the new audio file ---
-        print(f"## S3 SAVE: Successfully saved audio to bucket '{AUDIOS_BUCKET}' with key '{audio_key}'")
+        print(f"## S3 SAVE: Audio saved to bucket '{AUDIOS_BUCKET}' with key '{audio_key}'")
 
         audio_url = s3.generate_presigned_url(
             'get_object',
@@ -75,8 +102,7 @@ def lambda_handler(event, context):
             ExpiresIn=3600
         )
         
-        # --- DEBUG: Log the final presigned URL ---
-        print(f"## PRESIGNED URL: Generated URL is: {audio_url}")
+        print(f"## PRESIGNED URL: {audio_url}")
 
         return {
             'statusCode': 200,
@@ -85,9 +111,7 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        # --- DEBUG: Log any exception that occurs ---
-        print(f"## LAMBDA ERROR: An exception occurred: {e}")
-        # Use exc_info=True in a real logger for a full stack trace, but this is fine for basic debugging.
+        print(f"## LAMBDA ERROR: {e}")
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},

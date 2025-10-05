@@ -28,31 +28,44 @@ function MainContent() {
   const [query, setQuery] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isVoiceMode, setIsVoiceMode] = useState(false); // New state for the toggle
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
 
   const handleUploadSuccess = (url, key) => {
     setPdfUrl(url);
     setS3Key(key);
+    setChatHistory([]); 
   };
 
   const handleAsk = async (textQuery) => {
     if (!textQuery || !s3Key) return;
     setIsLoading(true);
     setAiResponse('');
+
+    const currentChat = { user: textQuery, ai: '' };
+    setChatHistory([...chatHistory, currentChat]);
+
     try {
       const response = await fetch(`${import.meta.env.VITE_API_GATEWAY_ENDPOINT_URL}/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // If your /query endpoint is protected, add the Authorization header here
-          // 'Authorization': `Bearer ${auth.user?.id_token}`
+          'Authorization': `Bearer ${auth.user?.id_token}`
         },
-        body: JSON.stringify({ query: textQuery, document_id: s3Key }),
+        body: JSON.stringify({
+          query: textQuery,
+          document_id: s3Key,
+          chat_history: chatHistory.map(chat => `User: ${chat.user}\nAI: ${chat.ai}`).join('\n')
+        }),
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
       setAiResponse(data.response_text);
+
+      const updatedHistory = [...chatHistory, { user: textQuery, ai: data.response_text }];
+      setChatHistory(updatedHistory);
+
 
       if (data.audio_url) {
         const audio = new Audio(data.audio_url);
@@ -99,7 +112,6 @@ function MainContent() {
     <div className="App">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #444' }}>
         <h1>Welcome, {auth.user?.profile.email}</h1>
-        <p>Welcome, {auth.user?.profile.email}</p>
         <button onClick={() => auth.signoutRedirect()}>Log out</button>
       </header>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', padding: '1rem' }}>
@@ -110,7 +122,17 @@ function MainContent() {
         <aside>
           <h2>AI Assistant</h2>
           <div style={{ border: '1px solid #ccc', borderRadius: '8px', width: '100%', height: '400px', backgroundColor: '#6e6e6eff', padding: '10px', boxSizing: 'border-box', overflowY: 'auto' }}>
-            {isLoading ? <p>Thinking...</p> : <p>{aiResponse || "Ask a question to see the answer here."}</p>}
+          {chatHistory.map((chat, index) => (
+            <div key={index}>
+              <p><strong>You:</strong> {chat.user}</p>
+              <p><strong>AI:</strong> {isLoading && index === chatHistory.length -1 ? "Thinking..." : chat.ai}</p>
+            </div>
+          ))}
+          {aiResponse && !isLoading && (
+              <div>
+                  <p><strong>AI:</strong> {aiResponse}</p>
+              </div>
+          )}
           </div>
 
           {isVoiceMode ? (

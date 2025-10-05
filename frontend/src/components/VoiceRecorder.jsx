@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
+import { useAuth } from 'react-oidc-context';
 import WavEncoder from 'wav-encoder';
 
 const VoiceRecorder = ({ onTranscriptionComplete }) => {
+    const auth = useAuth();
     const [isRecording, setIsRecording] = useState(false);
     const mediaRecorder = useRef(null);
     const audioChunks = useRef([]);
@@ -71,6 +73,7 @@ const VoiceRecorder = ({ onTranscriptionComplete }) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${auth.user?.id_token}`
                 },
                 body: JSON.stringify({
                     audio_data: audio_b64
