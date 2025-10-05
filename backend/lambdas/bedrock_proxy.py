@@ -15,7 +15,7 @@ s3 = boto3.client('s3', config=Config(s3={'addressing_style': 'path'}))
 CHUNKS_TABLE_NAME = os.environ.get('DYNAMODB_CHUNKS_TABLE')
 HISTORY_TABLE_NAME = os.environ.get('DYNAMODB_HISTORY_TABLE')
 AUDIOS_BUCKET = os.environ.get('AUDIOS_BUCKET')
-MODEL_ID = 'amazon.titan-text-express-v1'
+MODEL_ID = 'openai.gpt-oss-120b-1:0'
 
 def lambda_handler(event, context):
     try:
@@ -71,20 +71,35 @@ def lambda_handler(event, context):
 
         Question: {user_query}
         
-        Assistant:
-        """
+        Assistant:"""
 
-        # Invoke the Bedrock model
+        # Invoke the Bedrock model (OpenAI gpt-oss format)
         bedrock_request = {
             "body": json.dumps({
-                "inputText": prompt,
-                "textGenerationConfig": {"maxTokenCount": 1024, "temperature": 0.1, "topP": 0.9}
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.1,
+                "top_p": 0.9,
             }),
-            "modelId": MODEL_ID, "contentType": "application/json", "accept": "application/json"
+            "modelId": MODEL_ID,
+            "contentType": "application/json",
+            "accept": "application/json"
         }
+        
         bedrock_response = bedrock_runtime.invoke_model(**bedrock_request)
         response_body = json.loads(bedrock_response.get('body').read())
-        ai_response_text = response_body.get('results')[0].get('outputText').strip()
+        
+        # Extract the response text from the OpenAI output structure
+        ai_full_response_text = response_body['choices'][0]['message']['content'].strip()
+        try:
+            ai_response_text = ai_full_response_text.split("</reasoning>")[1]
+        except Exception as e:
+            ai_response_text = ai_full_response_text
+            print(f"[WARN] the ai responded with - \n{ai_full_response_text} and i responded with \n{ai_response_text}")
 
         print(f"## BEDROCK RESPONSE: '{ai_response_text}'")
         
