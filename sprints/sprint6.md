@@ -46,8 +46,3 @@ This sprint addressed the scalability bottleneck identified in Sprint 5 and deli
 * [ ] The `pdf-talker-lambda-exec` IAM role is updated with permissions for SageMaker invocation and Amazon Polly.
 * [ ] The `transcribe_proxy` Lambda is updated to use the SageMaker endpoint instead of the public Hugging Face API.
 * [ ] The `bedrock_proxy` Lambda successfully sends its text response to Amazon Polly to synthesize speech and save it to S3.
-* [ ] The frontend replaces the placeholder with a `three.js` canvas rendering the 3D avatar.
-* [ ] The frontend receives and automatically plays the synthesized audio response from the presigned URL.
-* [ ] The avatar's mouth moves in sync with the played audio.
-* [ ] The user can ask a question with their voice and receive a spoken, animated answer from the AI, completing the full voice interaction loop.
-* [ ] The entire transcription and TTS pipeline is now hosted within AWS, ensuring scalability and reliability.
