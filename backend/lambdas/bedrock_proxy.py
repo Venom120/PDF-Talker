@@ -21,17 +21,33 @@ def lambda_handler(event, context):
     try:
         print(f"## RECEIVED EVENT: {json.dumps(event)}")
 
+        # Get user ID from the JWT authorizer's claims context
         user_id = event['requestContext']['authorizer']['jwt']['claims']['sub']
 
         body = json.loads(event.get('body', '{}'))
         user_query = body.get('query')
         document_id = body.get('document_id')
-        chat_history_str = body.get('chat_history', '')
-
+        
         print(f"## PARSED PARAMETERS: document_id='{document_id}', user_query='{user_query}', user_id='{user_id}'")
 
-        if not all([user_query, document_id, CHUNKS_TABLE_NAME, HISTORY_TABLE_NAME, AUDIOS_BUCKET, user_id]):
-            raise ValueError("Missing required parameters.")
+        if not all([user_query, document_id, CHUNKS_TABLE_NAME, HISTORY_TABLE_NAME, AUDIOS_BUCKET]):
+            raise ValueError("Missing required parameters or environment variables.")
+
+        # 1. Retrieve Chat History from DynamoDB
+        history_table = dynamodb.Table(HISTORY_TABLE_NAME) # type: ignore
+        history_response = history_table.query(
+            KeyConditionExpression=boto3.dynamodb.conditions.Key('user_id').eq(user_id), # type: ignore
+            # Filter for the current document
+            FilterExpression=boto3.dynamodb.conditions.Attr('document_id').eq(document_id), # type: ignore
+            ScanIndexForward=False, # Get the most recent messages first
+            Limit=10 # Limit to the last 5 exchanges (10 items)
+        )
+        
+        # Format the history for the prompt
+        chat_history_items = sorted(history_response.get('Items', []), key=lambda item: item['timestamp'])
+        chat_history_str = "\n".join([f"User: {item['user_query']}\nAI: {item['ai_response']}" for item in chat_history_items])
+        print(f"## RETRIEVED CHAT HISTORY: {chat_history_str}")
+
 
         # Retrieve document chunks from DynamoDB
         chunks_table = dynamodb.Table(CHUNKS_TABLE_NAME) # type: ignore
@@ -41,9 +57,9 @@ def lambda_handler(event, context):
 
         print(f"## DYNAMODB CONTEXT: Retrieved {len(chunks)} chunks for document '{document_id}'.")
 
-        # Construct the prompt with chat history
+        # 2. Construct the prompt with the retrieved chat history
         prompt = f"""
-        Human: Use the following context and chat history to answer the user's question. If you don't know the answer, just say "I couldn't find the answer in this context".
+        Human: Use the following context and chat history to answer the user's question. If you don't know the answer, just say "Not Found".
 
         <context>
         {context_text}
@@ -62,7 +78,7 @@ def lambda_handler(event, context):
         bedrock_request = {
             "body": json.dumps({
                 "inputText": prompt,
-                "textGenerationConfig": {"maxTokenCount": 512, "temperature": 0.1, "topP": 0.9}
+                "textGenerationConfig": {"maxTokenCount": 1024, "temperature": 0.1, "topP": 0.9}
             }),
             "modelId": MODEL_ID, "contentType": "application/json", "accept": "application/json"
         }
@@ -72,8 +88,7 @@ def lambda_handler(event, context):
 
         print(f"## BEDROCK RESPONSE: '{ai_response_text}'")
         
-        # Save the current exchange to the chat history table
-        history_table = dynamodb.Table(HISTORY_TABLE_NAME) # type: ignore
+        # 3. Save the new exchange to the chat history table
         history_table.put_item(Item={
             'user_id': user_id,
             'timestamp': int(time.time()),
@@ -81,7 +96,6 @@ def lambda_handler(event, context):
             'user_query': user_query,
             'ai_response': ai_response_text
         })
-
 
         # Synthesize audio response with Polly
         polly_response = polly.synthesize_speech(
