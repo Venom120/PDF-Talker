@@ -38,7 +38,7 @@ def lambda_handler(event, context):
         # --- DEBUG: Log the context retrieved from DynamoDB ---
         print(f"## DYNAMODB CONTEXT: Retrieved {len(chunks)} chunks for document '{document_id}'. Total context length: {len(context_text)} chars.")
 
-        prompt = f"""\n\nHuman: Use the following context to answer the user's question. If you don't know the answer, just say that you don't know.
+        prompt = f"""\n\nHuman: Use the following context to answer the user's question. If you don't know the answer, just say "Not Found".
         <context>{context_text}</context>
         Question: {user_query}\n\nAssistant:"""
 
